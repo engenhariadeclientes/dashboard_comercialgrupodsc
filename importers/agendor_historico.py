@@ -163,8 +163,14 @@ def _upsert_negocio(conn, row: dict, lead_id: Optional[int]) -> None:
                               payload={"agendor_negocio_id": agendor_id, "etapa": etapa})
 
 
+def _ja_importado(conn, agendor_negocio_id: int) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM negocios WHERE agendor_negocio_id = %s", (agendor_negocio_id,))
+        return cur.fetchone() is not None
+
+
 def importar(caminhos: list[str]) -> None:
-    total_negocios = 0
+    total_negocios, pulados = 0, 0
     conexao = ConexaoComReconexao()
     try:
         for caminho in caminhos:
@@ -176,6 +182,13 @@ def importar(caminhos: list[str]) -> None:
 
             for valores in linhas[1:]:
                 row = dict(zip(headers, valores))
+                agendor_id = row.get("Código do Negócio")
+
+                # checagem rápida (índice único) pra pular o que já foi importado em
+                # execuções anteriores — permite reiniciar sem reprocessar tudo do zero
+                if agendor_id is not None and conexao.executar(lambda conn: _ja_importado(conn, int(agendor_id))):
+                    pulados += 1
+                    continue
 
                 def processar(conn, row=row):
                     lead_id = _resolver_lead_ou_none(conn, row)
@@ -190,7 +203,7 @@ def importar(caminhos: list[str]) -> None:
     finally:
         conexao.close()
 
-    logger.info("Importação do Agendor concluída: %d negócios processados", total_negocios)
+    logger.info("Importação do Agendor concluída: %d negócios processados, %d já importados antes (pulados)", total_negocios, pulados)
 
 
 if __name__ == "__main__":
