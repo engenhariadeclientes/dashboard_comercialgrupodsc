@@ -64,12 +64,22 @@ CANAL_AQUISICAO_MAP = {
 }
 
 
-def _extrair_consultor_repasse(tags: list[str]) -> Optional[str]:
+# tags Distrib_/Enviado_/Envio_ genéricas (sem nome de consultor de verdade) —
+# ainda contam como repasse, só não viram valor de leads.consultor
+_NOMES_GENERICOS_REPASSE = {"consultor"}
+
+
+def _detectar_repasse(tags: list[str]) -> tuple[bool, Optional[str]]:
+    """Retorna (houve_repasse, nome_do_consultor_se_especifico)."""
+    nomes = []
     for tag in tags:
         m = _RE_TAG_REPASSE.match(tag.strip())
         if m:
-            return m.group(2).strip()
-    return None
+            nomes.append(m.group(2).strip())
+    if not nomes:
+        return False, None
+    especificos = [n for n in nomes if n.lower() not in _NOMES_GENERICOS_REPASSE]
+    return True, (especificos[0] if especificos else None)
 
 
 def _mapear_canal(canal_raw: Optional[str]) -> Optional[str]:
@@ -78,10 +88,10 @@ def _mapear_canal(canal_raw: Optional[str]) -> Optional[str]:
     return CANAL_AQUISICAO_MAP.get(canal_raw.strip().lower())
 
 
-def _calcular_status_ia(variaveis: dict, tags: list[str], consultor_repasse: Optional[str]) -> tuple[str, bool]:
+def _calcular_status_ia(variaveis: dict, tags: list[str], houve_repasse: bool) -> tuple[str, bool]:
     if variaveis.get("MOTIVO_NAO_QUAL"):
         return "desqualificado", False
-    if consultor_repasse:
+    if houve_repasse:
         return "qualificado", True
     if any(t.strip().lower() == "insucesso" for t in tags):
         return "sem_resposta", False
@@ -111,8 +121,8 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
     if not (nome or email or telefone):
         return
 
-    consultor_repasse = _extrair_consultor_repasse(tags)
-    status_ia, qualificado_sql = _calcular_status_ia(variaveis, tags, consultor_repasse)
+    houve_repasse, consultor_repasse = _detectar_repasse(tags)
+    status_ia, qualificado_sql = _calcular_status_ia(variaveis, tags, houve_repasse)
     regiao_bc = variaveis.get("REGIÃO")
     profissao = variaveis.get("cargo-funcao")
 
