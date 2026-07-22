@@ -88,6 +88,8 @@ def _buscar_negocio_atual(conn, agendor_negocio_id: int) -> Optional[dict]:
 
 def _upsert_negocio(conn, deal: dict, lead_id: Optional[int]) -> None:
     status = mapear_status(deal.get("status_nome"))
+    etapa = deal.get("etapa")
+    valor = deal.get("valor")
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -110,10 +112,30 @@ def _upsert_negocio(conn, deal: dict, lead_id: Optional[int]) -> None:
             """,
             (
                 deal["agendor_negocio_id"], lead_id, deal.get("titulo"), deal.get("funil"),
-                deal.get("etapa"), deal.get("consultor"), deal.get("valor"), deal.get("valor"),
+                etapa, deal.get("consultor"), valor, valor,
                 status, deal.get("motivo_perda"), deal.get("data_criacao"), deal.get("data_fechamento"),
             ),
         )
+
+    if lead_id is not None:
+        gerou_proposta = eh_etapa_proposta_enviada(etapa) or bool(valor)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE leads SET
+                    agendor_negocio_id = %s,
+                    consultor = %s,
+                    etapa_atual = %s,
+                    gerou_proposta = %s OR leads.gerou_proposta,
+                    valor_orcamento = CASE WHEN %s THEN %s ELSE leads.valor_orcamento END,
+                    status_final = %s,
+                    data_fechamento = %s,
+                    atualizado_em = NOW()
+                WHERE id = %s
+                """,
+                (deal["agendor_negocio_id"], deal.get("consultor"), etapa, gerou_proposta,
+                 gerou_proposta, valor, status, deal.get("data_fechamento"), lead_id),
+            )
 
 
 def _processar_deal(conn, deal: dict, agora: datetime) -> None:

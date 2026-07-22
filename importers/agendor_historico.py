@@ -135,6 +135,26 @@ def _upsert_negocio(conn, row: dict, lead_id: Optional[int]) -> None:
             ),
         )
 
+    gerou_proposta = eh_etapa_proposta_enviada(etapa) or bool(valor)
+    if lead_id is not None:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE leads SET
+                    agendor_negocio_id = %s,
+                    consultor = %s,
+                    etapa_atual = %s,
+                    gerou_proposta = %s OR leads.gerou_proposta,
+                    valor_orcamento = CASE WHEN %s THEN %s ELSE leads.valor_orcamento END,
+                    status_final = %s,
+                    data_fechamento = %s,
+                    atualizado_em = NOW()
+                WHERE id = %s
+                """,
+                (agendor_id, row.get("Usuário responsável"), etapa, gerou_proposta,
+                 gerou_proposta, valor, status, row.get("Data de conclusão"), lead_id),
+            )
+
     momento_evento = row.get("Ultima atualização") or row.get("Data de cadastro")
     data_criacao = row.get("Data de cadastro")
 
