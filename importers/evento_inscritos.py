@@ -208,6 +208,9 @@ def importar_arquivo(conn, caminho: str) -> tuple[int, int]:
             if checkin and str(checkin).strip().lower() in ("sim", "yes", "true", "1"):
                 registrar_evento(conn, lead_id, FONTE, "checkin_evento", meta["data_evento"],
                                   canal=CANAL, campanha=meta["campanha"], origem_detalhe=meta["origem_detalhe"])
+
+            if (novos + existentes) % 50 == 0:
+                conn.commit()
     wb.close()
     return novos, existentes
 

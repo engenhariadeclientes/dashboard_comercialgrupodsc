@@ -137,6 +137,9 @@ def importar(caminho: str) -> None:
                 registrar_evento(conn, lead_id, FONTE, "importado", data_entrada,
                                   canal=CANAL, campanha=campanha, origem_detalhe=dados["origem_detalhe_entrada"],
                                   payload=dados["payload"])
+
+                if avaliados % 50 == 0:
+                    conn.commit()
         conn.commit()
 
     logger.info(

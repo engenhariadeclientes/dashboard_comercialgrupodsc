@@ -178,6 +178,9 @@ def importar(caminhos: list[str]) -> None:
                 lead_id = _resolver_lead_ou_none(conn, row)
                 _upsert_negocio(conn, row, lead_id)
                 total_negocios += 1
+                if total_negocios % 50 == 0:
+                    conn.commit()
+                    logger.info("... %d negócios processados", total_negocios)
             wb.close()
         conn.commit()
 

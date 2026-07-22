@@ -62,6 +62,8 @@ def importar(caminho: str) -> None:
                     novos += 1
                 else:
                     existentes += 1
+                if (novos + existentes) % 50 == 0:
+                    conn.commit()
         conn.commit()
 
     logger.info("Importação concluída: %d leads novos, %d já existentes (matched)", novos, existentes)
