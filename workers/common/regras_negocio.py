@@ -25,6 +25,7 @@ ORIGEM_CLIENTE_PARA_CANAL = {
     "indicação de clientes duplique e dsc": "indicacao",
     "eventos participantes": "evento",
     "eventos patrocinados": "evento",
+    "redes sociais": "meta_ads",  # confirmado pela Stella (22/07/2026): é como o Agendor rotula leads vindos de Meta Ads
 }
 
 

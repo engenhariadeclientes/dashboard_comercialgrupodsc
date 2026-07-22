@@ -109,7 +109,7 @@ def importar(caminho: str) -> None:
                 def processar(conn, cidade=cidade, uf_informada=uf_informada, telefone_final=telefone_final,
                               nome=nome, telefone_variacoes=variacoes, email=email, campanha=campanha,
                               tags_raw=tags_raw, eventos_raw=eventos_raw, data_entrada=data_entrada):
-                    marca_info = derivar_marca(conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone_final)
+                    marca_info = derivar_marca(conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone_final, campanha=campanha)
                     dados = {
                         "nome": nome,
                         "telefone": telefone_final,

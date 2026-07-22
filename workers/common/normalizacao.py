@@ -158,7 +158,7 @@ def resolver_uf_por_cidade(cidade: Optional[str], conn) -> Optional[str]:
     """
     if not cidade:
         return None
-    nome_norm = normalizar_texto_busca(cidade)
+    nome_norm = normalizar_texto_busca(cidade.replace("_", " "))
     with conn.cursor() as cur:
         cur.execute(
             "SELECT DISTINCT uf FROM municipios_ibge WHERE nome_normalizado = %s",
@@ -173,18 +173,23 @@ def resolver_uf_por_cidade(cidade: Optional[str], conn) -> Optional[str]:
     return "SC" if "SC" in ufs else None
 
 
+def _marca_por_texto(texto: Optional[str]) -> Optional[str]:
+    """Detecta 'duplique'/'dsc' num texto livre (nome de consultor, campanha)."""
+    if not texto:
+        return None
+    t = normalizar_texto_busca(texto)
+    if "duplique" in t:
+        return "Duplique"
+    if "dsc" in t:
+        return "DSC"
+    return None
+
+
 def marca_por_nome_consultor(consultor: Optional[str]) -> Optional[str]:
     """Consultores/responsáveis no Agendor costumam ter a marca no próprio nome
     (ex.: 'DUPLIQUE - SÃO JOSE', 'DSC - BELO HORIZONTE') — sinal usado por
     derivar_marca quando não há cidade/UF do lead (decisão 22/07/2026, Stella)."""
-    if not consultor:
-        return None
-    c = normalizar_texto_busca(consultor)
-    if "duplique" in c:
-        return "Duplique"
-    if "dsc" in c:
-        return "DSC"
-    return None
+    return _marca_por_texto(consultor)
 
 
 def derivar_marca(
@@ -193,13 +198,20 @@ def derivar_marca(
     uf_informada: Optional[str] = None,
     telefone_e164: Optional[str] = None,
     consultor: Optional[str] = None,
+    campanha: Optional[str] = None,
 ) -> dict:
     """Deriva marca/UF/regiao de um lead — regra de negócio central (4.1.1).
 
     Ordem: UF explícita/tag > cidade informada pelo lead (via IBGE, SC prioritária
-    em empate) > marca no nome do consultor responsável (Agendor) > default DSC
-    (maioria da base, decisão 22/07/2026 — Stella) quando só há nome de pessoa,
-    sem cidade/região/consultor.
+    em empate) > marca no nome do consultor responsável (Agendor) > marca no nome
+    da campanha (ex.: 'Base de Leads Anúncios Duplique') > default DSC (maioria da
+    base, decisão 22/07/2026 — Stella) quando não sobra nenhum sinal.
+
+    A campanha só entra como sinal de ÚLTIMO recurso (depois de cidade/UF reais):
+    quem pagou o anúncio não define a marca do lead (uma campanha Duplique pode
+    captar um condomínio de fora de SC) — mas na ausência de qualquer dado de
+    localização, é melhor que o default cego pra DSC (decisão 22/07/2026, Stella,
+    revisão do caso de leads com campanha claramente identificada mas sem cidade).
 
     DECISÕES 22/07/2026 (Stella):
     - o DDD do telefone NÃO é mais fonte válida pra derivar marca (reverte o
@@ -227,6 +239,5 @@ def derivar_marca(
             "uf_derivada_por_ddd": uf_derivada_por_ddd,
         }
 
-    marca_consultor = marca_por_nome_consultor(consultor)
-    marca = marca_consultor or "DSC"
+    marca = _marca_por_texto(consultor) or _marca_por_texto(campanha) or "DSC"
     return {"marca": marca, "uf": None, "regiao": None, "uf_derivada_por_ddd": False}
