@@ -1,0 +1,32 @@
+# Dicionário de sinônimos dos campos dos forms nativos da Meta (spec seção 5.1).
+# Chave = variação de pergunta já observada no form; valor = destino na base.
+# Pergunta não mapeada aqui → cai no payload bruto e é logada como "pergunta desconhecida".
+
+email:
+  - "Email"
+
+nome:
+  - "First Name"
+  - "Full name"
+
+telefone:
+  - "Phone Number"
+  - "Phone number"
+
+cidade:
+  - "Onde Está Localizado O Seu Condomínio"
+  - "Onde fica seu condomínio"
+
+profissao_funcao:
+  - "Você É"
+  - "Qual é sua relação com o condomínio?"
+
+origem_detalhe:
+  - "Form Name"
+  - "Identificação do formulário do lead"
+
+# Normalização das respostas de função/relação para o conjunto padrão
+profissao_funcao_normalizacao:
+  "gestor_condominial_": "gestor condominial"
+  "síndico (a) morador (a)": "síndico morador"
+  "sindico (a) morador (a)": "síndico morador"

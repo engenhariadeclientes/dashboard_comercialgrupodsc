@@ -1,0 +1,16 @@
+# Dados brutos de carga inicial (PII real de leads/clientes) — nunca versionar.
+# Ficam só localmente/no Railway; os importers leem do disco em tempo de execução.
+*.xlsx
+*.xls
+*.csv
+!sql/**/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Segredos
+.env
+.env.*

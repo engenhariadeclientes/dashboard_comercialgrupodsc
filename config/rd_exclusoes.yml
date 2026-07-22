@@ -1,0 +1,11 @@
+# Padrões (case-insensitive) de nome de campanha/e-mail que NÃO entram na base
+# nem nas métricas de funil/ROI — spec seção 5.3. Editável sem mexer em código.
+# E-mail cujo nome de campanha bater com qualquer padrão abaixo → nem o evento é gravado.
+
+padroes_exclusao:
+  - "onboarding"
+  - "boas-vindas"
+  - "bem-vindo"
+  - "pesquisa de satisfação"
+  - "satisfação"
+  - "nps"
