@@ -13,7 +13,7 @@ import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from importers.common_import import logger  # noqa: E402
-from workers.common.db import get_connection  # noqa: E402
+from workers.common.db import ConexaoComReconexao  # noqa: E402
 from workers.common.eventos import registrar_evento  # noqa: E402
 from workers.common.matching import atualizar_campos_lead, resolver_ou_criar_lead  # noqa: E402
 from workers.common.normalizacao import (  # noqa: E402
@@ -164,8 +164,9 @@ def _upsert_negocio(conn, row: dict, lead_id: Optional[int]) -> None:
 
 
 def importar(caminhos: list[str]) -> None:
-    total_negocios, total_leads_novos = 0, 0
-    with get_connection() as conn:
+    total_negocios = 0
+    conexao = ConexaoComReconexao()
+    try:
         for caminho in caminhos:
             logger.info("Lendo %s", caminho)
             wb = openpyxl.load_workbook(caminho, data_only=True)
@@ -175,14 +176,19 @@ def importar(caminhos: list[str]) -> None:
 
             for valores in linhas[1:]:
                 row = dict(zip(headers, valores))
-                lead_id = _resolver_lead_ou_none(conn, row)
-                _upsert_negocio(conn, row, lead_id)
+
+                def processar(conn, row=row):
+                    lead_id = _resolver_lead_ou_none(conn, row)
+                    _upsert_negocio(conn, row, lead_id)
+                    conn.commit()
+
+                conexao.executar(processar)
                 total_negocios += 1
                 if total_negocios % 50 == 0:
-                    conn.commit()
                     logger.info("... %d negócios processados", total_negocios)
             wb.close()
-        conn.commit()
+    finally:
+        conexao.close()
 
     logger.info("Importação do Agendor concluída: %d negócios processados", total_negocios)
 

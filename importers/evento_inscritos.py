@@ -21,7 +21,7 @@ import openpyxl
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from importers.common_import import logger  # noqa: E402
-from workers.common.db import get_connection  # noqa: E402
+from workers.common.db import ConexaoComReconexao  # noqa: E402
 from workers.common.eventos import registrar_evento  # noqa: E402
 from workers.common.matching import atualizar_campos_lead, resolver_ou_criar_lead  # noqa: E402
 from workers.common.normalizacao import (  # noqa: E402
@@ -118,9 +118,9 @@ def _valor(row: tuple, mapa: dict[str, int], chave: str):
     return v.strip() if isinstance(v, str) else v
 
 
-def importar_arquivo(conn, caminho: str) -> tuple[int, int]:
+def importar_arquivo(conexao, caminho: str) -> tuple[int, int]:
     wb = openpyxl.load_workbook(caminho, data_only=True)
-    novos, existentes = 0, 0
+    contadores = {"novos": 0, "existentes": 0}
     telefones_vistos_no_arquivo: set[str] = set()
 
     for nome_sheet in wb.sheetnames:
@@ -164,7 +164,6 @@ def importar_arquivo(conn, caminho: str) -> tuple[int, int]:
             nome = normalizar_nome(nome_raw)
             email = normalizar_email(email_raw)
             variacoes = gerar_variacoes_telefone(telefone) if telefone else []
-            marca_info = derivar_marca(conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone)
 
             colunas_extra = {
                 k: row[idx] for k, idx in mapa.items()
@@ -174,56 +173,61 @@ def importar_arquivo(conn, caminho: str) -> tuple[int, int]:
             if telefone_invalido and telefone_raw:
                 payload["telefone_invalido"] = True
 
-            dados = {
-                "nome": nome,
-                "telefone": telefone,
-                "telefone_variacoes": variacoes or None,
-                "email": email,
-                "cidade": cidade,
-                "uf": marca_info["uf"],
-                "regiao": marca_info["regiao"],
-                "marca": marca_info["marca"],
-                "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
-                "canal_entrada": CANAL,
-                "campanha_entrada": meta["campanha"],
-                "origem_detalhe_entrada": meta["origem_detalhe"],
-                "tipo_captura": None,
-                "data_entrada": meta["data_evento"],
-                "payload": payload,
-            }
+            def processar(conn, nome=nome, telefone=telefone, variacoes=variacoes, email=email, cidade=cidade,
+                          uf_informada=uf_informada, payload=payload, checkin=checkin):
+                marca_info = derivar_marca(conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone)
+                dados = {
+                    "nome": nome,
+                    "telefone": telefone,
+                    "telefone_variacoes": variacoes or None,
+                    "email": email,
+                    "cidade": cidade,
+                    "uf": marca_info["uf"],
+                    "regiao": marca_info["regiao"],
+                    "marca": marca_info["marca"],
+                    "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
+                    "canal_entrada": CANAL,
+                    "campanha_entrada": meta["campanha"],
+                    "origem_detalhe_entrada": meta["origem_detalhe"],
+                    "tipo_captura": None,
+                    "data_entrada": meta["data_evento"],
+                    "payload": payload,
+                }
 
-            lead_id, criado = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
-            if not criado:
-                atualizar_campos_lead(
-                    conn, lead_id,
-                    {k: dados[k] for k in ("cidade", "uf", "regiao", "marca", "uf_derivada_por_ddd") if dados.get(k) is not None},
-                )
-                existentes += 1
-            else:
-                novos += 1
+                lead_id, criado = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
+                if not criado:
+                    atualizar_campos_lead(
+                        conn, lead_id,
+                        {k: dados[k] for k in ("cidade", "uf", "regiao", "marca", "uf_derivada_por_ddd") if dados.get(k) is not None},
+                    )
+                    contadores["existentes"] += 1
+                else:
+                    contadores["novos"] += 1
 
-            registrar_evento(conn, lead_id, FONTE, "importado", meta["data_evento"],
-                              canal=CANAL, campanha=meta["campanha"], origem_detalhe=meta["origem_detalhe"],
-                              payload=payload)
-            if checkin and str(checkin).strip().lower() in ("sim", "yes", "true", "1"):
-                registrar_evento(conn, lead_id, FONTE, "checkin_evento", meta["data_evento"],
-                                  canal=CANAL, campanha=meta["campanha"], origem_detalhe=meta["origem_detalhe"])
-
-            if (novos + existentes) % 50 == 0:
+                registrar_evento(conn, lead_id, FONTE, "importado", meta["data_evento"],
+                                  canal=CANAL, campanha=meta["campanha"], origem_detalhe=meta["origem_detalhe"],
+                                  payload=payload)
+                if checkin and str(checkin).strip().lower() in ("sim", "yes", "true", "1"):
+                    registrar_evento(conn, lead_id, FONTE, "checkin_evento", meta["data_evento"],
+                                      canal=CANAL, campanha=meta["campanha"], origem_detalhe=meta["origem_detalhe"])
                 conn.commit()
+
+            conexao.executar(processar)
     wb.close()
-    return novos, existentes
+    return contadores["novos"], contadores["existentes"]
 
 
 def importar(caminhos: list[str]) -> None:
     total_novos, total_existentes = 0, 0
-    with get_connection() as conn:
+    conexao = ConexaoComReconexao()
+    try:
         for caminho in caminhos:
             logger.info("Lendo %s", caminho)
-            novos, existentes = importar_arquivo(conn, caminho)
+            novos, existentes = importar_arquivo(conexao, caminho)
             total_novos += novos
             total_existentes += existentes
-        conn.commit()
+    finally:
+        conexao.close()
     logger.info("Importação de eventos concluída: %d leads novos, %d já existentes (matched)", total_novos, total_existentes)
 
 

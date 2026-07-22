@@ -27,7 +27,7 @@ import ftfy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from importers.common_import import logger  # noqa: E402
-from workers.common.db import get_connection  # noqa: E402
+from workers.common.db import ConexaoComReconexao  # noqa: E402
 from workers.common.eventos import registrar_evento  # noqa: E402
 from workers.common.matching import atualizar_campos_lead, resolver_ou_criar_lead  # noqa: E402
 from workers.common.normalizacao import (  # noqa: E402
@@ -71,7 +71,8 @@ def _parse_data(valor: str) -> datetime:
 
 def importar(caminho: str) -> None:
     novos, existentes, avaliados = 0, 0, 0
-    with get_connection() as conn:
+    conexao = ConexaoComReconexao()
+    try:
         with open(caminho, encoding="cp1252", errors="replace", newline="") as f:
             leitor = csv.reader(f)
             next(leitor)  # cabeçalho — não usamos por nome (mesmo problema de encoding)
@@ -104,43 +105,49 @@ def importar(caminho: str) -> None:
 
                 telefone_final = telefone if not telefone_invalido else None
                 variacoes = gerar_variacoes_telefone(telefone_final) if telefone_final else []
-                marca_info = derivar_marca(conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone_final)
 
-                dados = {
-                    "nome": nome,
-                    "telefone": telefone_final,
-                    "telefone_variacoes": variacoes or None,
-                    "email": email,
-                    "cidade": cidade,
-                    "uf": marca_info["uf"],
-                    "regiao": marca_info["regiao"],
-                    "marca": marca_info["marca"],
-                    "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
-                    "canal_entrada": CANAL,
-                    "campanha_entrada": campanha,
-                    "origem_detalhe_entrada": _f(tags_raw) or None,
-                    "tipo_captura": None,
-                    "data_entrada": data_entrada,
-                    "payload": {"tags_rd": _f(tags_raw), "eventos_rd": _f(eventos_raw)},
-                }
+                def processar(conn, cidade=cidade, uf_informada=uf_informada, telefone_final=telefone_final,
+                              nome=nome, telefone_variacoes=variacoes, email=email, campanha=campanha,
+                              tags_raw=tags_raw, eventos_raw=eventos_raw, data_entrada=data_entrada):
+                    marca_info = derivar_marca(conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone_final)
+                    dados = {
+                        "nome": nome,
+                        "telefone": telefone_final,
+                        "telefone_variacoes": telefone_variacoes or None,
+                        "email": email,
+                        "cidade": cidade,
+                        "uf": marca_info["uf"],
+                        "regiao": marca_info["regiao"],
+                        "marca": marca_info["marca"],
+                        "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
+                        "canal_entrada": CANAL,
+                        "campanha_entrada": campanha,
+                        "origem_detalhe_entrada": _f(tags_raw) or None,
+                        "tipo_captura": None,
+                        "data_entrada": data_entrada,
+                        "payload": {"tags_rd": _f(tags_raw), "eventos_rd": _f(eventos_raw)},
+                    }
 
-                lead_id, criado = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
-                if not criado:
-                    atualizar_campos_lead(
-                        conn, lead_id,
-                        {k: dados[k] for k in ("cidade", "uf", "regiao", "marca", "uf_derivada_por_ddd") if dados.get(k) is not None},
-                    )
-                    existentes += 1
-                else:
-                    novos += 1
+                    lead_id, criado = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
+                    if not criado:
+                        atualizar_campos_lead(
+                            conn, lead_id,
+                            {k: dados[k] for k in ("cidade", "uf", "regiao", "marca", "uf_derivada_por_ddd") if dados.get(k) is not None},
+                        )
+                        nonlocal existentes
+                        existentes += 1
+                    else:
+                        nonlocal novos
+                        novos += 1
 
-                registrar_evento(conn, lead_id, FONTE, "importado", data_entrada,
-                                  canal=CANAL, campanha=campanha, origem_detalhe=dados["origem_detalhe_entrada"],
-                                  payload=dados["payload"])
-
-                if avaliados % 50 == 0:
+                    registrar_evento(conn, lead_id, FONTE, "importado", data_entrada,
+                                      canal=CANAL, campanha=campanha, origem_detalhe=dados["origem_detalhe_entrada"],
+                                      payload=dados["payload"])
                     conn.commit()
-        conn.commit()
+
+                conexao.executar(processar)
+    finally:
+        conexao.close()
 
     logger.info(
         "Importação RD (leads Meta) concluída: %d avaliados, %d novos, %d já existentes (matched)",
