@@ -15,7 +15,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from workers.agendor_api import listar_deals  # noqa: E402
+from workers.agendor_api import buscar_pessoa, listar_deals  # noqa: E402
 from workers.common.db import get_connection  # noqa: E402
 from workers.common.eventos import registrar_evento  # noqa: E402
 from workers.common.matching import atualizar_campos_lead, resolver_ou_criar_lead  # noqa: E402
@@ -42,12 +42,16 @@ FONTE = "agendor"
 
 
 def _resolver_lead(conn, deal: dict) -> Optional[int]:
-    pessoa = deal.get("pessoa")
-    if not pessoa:
+    pessoa_id = deal.get("pessoa_id")
+    if pessoa_id is None:
         return None
 
-    nome = normalizar_nome(pessoa.get("nome"))
-    email = normalizar_email(pessoa.get("email"))
+    pessoa = buscar_pessoa(pessoa_id) or {}
+    nome_raw = pessoa.get("nome") or deal.get("pessoa_nome_resumo")
+    email_raw = pessoa.get("email") or deal.get("pessoa_email_resumo")
+
+    nome = normalizar_nome(nome_raw)
+    email = normalizar_email(email_raw)
     telefone, invalido = extrair_telefone_valido(pessoa.get("telefone")) if pessoa.get("telefone") else (None, True)
     if invalido:
         telefone = None
@@ -56,20 +60,22 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         return None
 
     variacoes = gerar_variacoes_telefone(telefone) if telefone else []
-    marca_info = derivar_marca(conn, telefone_e164=telefone)
+    marca_info = derivar_marca(conn, cidade=pessoa.get("cidade"), uf_informada=pessoa.get("uf"), telefone_e164=telefone)
 
     dados = {
         "nome": nome,
         "telefone": telefone,
         "telefone_variacoes": variacoes or None,
         "email": email,
+        "cidade": pessoa.get("cidade"),
+        "profissao_funcao": pessoa.get("profissao_funcao"),
         "marca": marca_info["marca"],
         "uf": marca_info["uf"],
         "regiao": marca_info["regiao"],
         "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
         "canal_entrada": "organico",
         "data_entrada": deal.get("data_criacao") or datetime.now(timezone.utc),
-        "payload": {"origem": "sync_agendor"},
+        "payload": {"origem": "sync_agendor", "organizacao": pessoa.get("organizacao_nome") or deal.get("organizacao_nome")},
     }
     lead_id, criado = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
     if not criado:
