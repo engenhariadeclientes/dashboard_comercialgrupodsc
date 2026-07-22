@@ -132,17 +132,19 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
     with conn.cursor() as cur:
         if telefone:
             cur.execute(
-                "SELECT id, status_ia FROM leads WHERE telefone = ANY(%s) OR telefone_variacoes && %s LIMIT 1",
+                "SELECT id, status_ia, canal_entrada FROM leads WHERE telefone = ANY(%s) OR telefone_variacoes && %s LIMIT 1",
                 ([telefone, *variacoes], [telefone, *variacoes]),
             )
         else:
-            cur.execute("SELECT id, status_ia FROM leads WHERE email = %s LIMIT 1", (email,))
+            cur.execute("SELECT id, status_ia, canal_entrada FROM leads WHERE email = %s LIMIT 1", (email,))
         row = cur.fetchone()
         if row:
             lead_id_existente = row["id"]
             status_ia_anterior = row["status_ia"]
+            canal_atual = row["canal_entrada"]
         else:
             status_ia_anterior = None
+            canal_atual = None
 
     if lead_id_existente is None:
         marca_info = derivar_marca(conn, cidade=regiao_bc, consultor=consultor_repasse)
@@ -169,12 +171,20 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
         lead_id, _ = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
     else:
         lead_id = lead_id_existente
-        atualizar_campos_lead(conn, lead_id, {
+        campos = {
             "dados_botconversa": Jsonb(dados_botconversa),
             "passou_ia": True,
             "status_ia": status_ia,
             "qualificado_sql": qualificado_sql,
-        })
+        }
+        # canal_entrada='organico' é a marca de "não sabemos a origem" — se o
+        # BotConversa revela um canal concreto (ex.: Facebook Ads), corrige em vez
+        # de manter uma atribuição que já era incerta (decisão da Stella, 22/07/2026)
+        if canal_atual == "organico":
+            canal_bc = _mapear_canal(variaveis.get("Canal de Aquisição"))
+            if canal_bc:
+                campos["canal_entrada"] = canal_bc
+        atualizar_campos_lead(conn, lead_id, campos)
 
     data_evento_conversa = sub.get("created_at") or agora
     registrar_evento(conn, lead_id, FONTE, "ia_iniciou_conversa", data_evento_conversa,
