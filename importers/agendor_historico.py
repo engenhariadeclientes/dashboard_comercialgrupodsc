@@ -163,16 +163,19 @@ def _upsert_negocio(conn, row: dict, lead_id: Optional[int]) -> None:
                               payload={"agendor_negocio_id": agendor_id, "etapa": etapa})
 
 
-def _ja_importado(conn, agendor_negocio_id: int) -> bool:
+def _ids_ja_importados(conn) -> set:
     with conn.cursor() as cur:
-        cur.execute("SELECT 1 FROM negocios WHERE agendor_negocio_id = %s", (agendor_negocio_id,))
-        return cur.fetchone() is not None
+        cur.execute("SELECT agendor_negocio_id FROM negocios")
+        return {r["agendor_negocio_id"] for r in cur.fetchall()}
 
 
 def importar(caminhos: list[str]) -> None:
     total_negocios, pulados = 0, 0
     conexao = ConexaoComReconexao()
     try:
+        ja_importados = conexao.executar(_ids_ja_importados)
+        logger.info("%d negócios já importados em execuções anteriores (serão pulados)", len(ja_importados))
+
         for caminho in caminhos:
             logger.info("Lendo %s", caminho)
             wb = openpyxl.load_workbook(caminho, data_only=True)
@@ -184,9 +187,10 @@ def importar(caminhos: list[str]) -> None:
                 row = dict(zip(headers, valores))
                 agendor_id = row.get("Código do Negócio")
 
-                # checagem rápida (índice único) pra pular o que já foi importado em
-                # execuções anteriores — permite reiniciar sem reprocessar tudo do zero
-                if agendor_id is not None and conexao.executar(lambda conn: _ja_importado(conn, int(agendor_id))):
+                # checagem em memória (sem round-trip de rede) pra pular o que já foi
+                # importado em execuções anteriores — permite reiniciar sem reprocessar
+                # tudo do zero a cada corte do ambiente (~30min de duração de background)
+                if agendor_id is not None and int(agendor_id) in ja_importados:
                     pulados += 1
                     continue
 
