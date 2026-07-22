@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from psycopg.types.json import Jsonb
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from workers.botconversa_api import listar_subscribers  # noqa: E402
@@ -108,6 +110,21 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
     regiao_bc = variaveis.get("REGIÃO")
     profissao = variaveis.get("cargo-funcao")
 
+    # retrato consultável (sobrescrito a cada sync — diferente do payload de eventos,
+    # que é histórico) dos campos personalizados mais úteis pro acompanhamento
+    dados_botconversa = {
+        "temperatura": variaveis.get("TEMPERATURA"),
+        "perfil_cliente": variaveis.get("PERFIL_CLIENTE"),
+        "resumo_conversa": variaveis.get("RESUMO CONVERSA") or variaveis.get("Resumo da conversa"),
+        "data_solicitada": variaveis.get("DATA_SOLICITADA"),
+        "horario_solicitado": variaveis.get("HORARIO_SOLICITADO"),
+        "telefone_decisor": variaveis.get("TELEFONE_DECISOR"),
+        "motivo_nao_qual": variaveis.get("MOTIVO_NAO_QUAL"),
+        "canal_aquisicao_bc": variaveis.get("Canal de Aquisição"),
+        "tags": tags,
+        "conta": marca_conta,
+    }
+
     variacoes = gerar_variacoes_telefone(telefone) if telefone else []
 
     # verifica se o lead já existe (pra decidir se mexe em canal_entrada/marca)
@@ -146,12 +163,14 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
             "passou_ia": True,
             "status_ia": status_ia,
             "qualificado_sql": qualificado_sql,
+            "dados_botconversa": Jsonb(dados_botconversa),
             "payload": {"origem": "sync_botconversa", "conta": marca_conta},
         }
         lead_id, _ = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
     else:
         lead_id = lead_id_existente
         atualizar_campos_lead(conn, lead_id, {
+            "dados_botconversa": Jsonb(dados_botconversa),
             "passou_ia": True,
             "status_ia": status_ia,
             "qualificado_sql": qualificado_sql,
