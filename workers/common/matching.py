@@ -131,8 +131,16 @@ def resolver_ou_criar_lead(conn, dados: dict, fonte: str) -> tuple[int, bool]:
     valores = [dados[k] for k in colunas]
     placeholders = ", ".join(["%s"] * len(colunas))
     with conn.cursor() as cur:
+        # ON CONFLICT no telefone: defesa contra corrida entre dois processos
+        # resolvendo o mesmo telefone novo ao mesmo tempo (ex.: dois importers
+        # rodando em paralelo) — sem isso o segundo processo crasha com
+        # UniqueViolation em vez de simplesmente enxergar o lead que o outro criou
         cur.execute(
-            f"INSERT INTO leads ({', '.join(colunas)}) VALUES ({placeholders}) RETURNING id",
+            f"""
+            INSERT INTO leads ({', '.join(colunas)}) VALUES ({placeholders})
+            ON CONFLICT (telefone) WHERE telefone IS NOT NULL DO UPDATE SET atualizado_em = NOW()
+            RETURNING id
+            """,
             valores,
         )
         novo_id = cur.fetchone()["id"]
