@@ -27,6 +27,8 @@ from workers.common.regras_negocio import (  # noqa: E402
     eh_etapa_assinatura_contrato,
     eh_etapa_lead_sem_perfil,
     eh_etapa_proposta_enviada,
+    eh_nome_jornada_porter,
+    extrair_regiao_jornada_porter,
     mapear_canal_origem_agendor,
     mapear_status,
 )
@@ -70,7 +72,14 @@ def _resolver_lead_ou_none(conn, row: dict) -> Optional[int]:
         conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone,
         consultor=row.get("Usuário responsável"),
     )
-    canal = mapear_canal_origem_agendor(row.get("Origem do cliente"))
+    nome_raw_pessoa = row.get("Pessoa relacionada")
+    if eh_nome_jornada_porter(nome_raw_pessoa):
+        canal = "evento"
+        regiao_jp = extrair_regiao_jornada_porter(nome_raw_pessoa)
+        campanha = f"Jornada_Porter_{regiao_jp}" if regiao_jp else "Jornada_Porter"
+    else:
+        canal = mapear_canal_origem_agendor(row.get("Origem do cliente"))
+        campanha = None
 
     dados = {
         "nome": nome,
@@ -83,7 +92,7 @@ def _resolver_lead_ou_none(conn, row: dict) -> Optional[int]:
         "marca": marca_info["marca"],
         "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
         "canal_entrada": canal,
-        "campanha_entrada": None,
+        "campanha_entrada": campanha,
         "origem_detalhe_entrada": row.get("Origem do cliente"),
         "tipo_captura": None,
         "data_entrada": row.get("Data de cadastro") or row.get("Data de início"),

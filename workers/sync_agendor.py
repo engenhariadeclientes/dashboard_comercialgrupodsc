@@ -30,6 +30,8 @@ from workers.common.regras_negocio import (  # noqa: E402
     eh_etapa_assinatura_contrato,
     eh_etapa_lead_sem_perfil,
     eh_etapa_proposta_enviada,
+    eh_nome_jornada_porter,
+    extrair_regiao_jornada_porter,
     mapear_status,
 )
 from workers.common.sync_state import registrar_sync  # noqa: E402
@@ -65,6 +67,16 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         consultor=deal.get("consultor"),
     )
 
+    # sinal do nome (seção "Jornada Porter" — decisão 22/07/2026): o Agendor sozinho
+    # não sabe a origem real do contato, mas o nome costuma denunciar "JP-<região>"
+    if eh_nome_jornada_porter(nome_raw):
+        canal_entrada = "evento"
+        regiao_jp = extrair_regiao_jornada_porter(nome_raw)
+        campanha_entrada = f"Jornada_Porter_{regiao_jp}" if regiao_jp else "Jornada_Porter"
+    else:
+        canal_entrada = "organico"
+        campanha_entrada = None
+
     dados = {
         "nome": nome,
         "telefone": telefone,
@@ -76,7 +88,8 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         "uf": marca_info["uf"],
         "regiao": marca_info["regiao"],
         "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
-        "canal_entrada": "organico",
+        "canal_entrada": canal_entrada,
+        "campanha_entrada": campanha_entrada,
         "data_entrada": deal.get("data_criacao") or datetime.now(timezone.utc),
         "payload": {"origem": "sync_agendor", "organizacao": pessoa.get("organizacao_nome") or deal.get("organizacao_nome")},
     }
