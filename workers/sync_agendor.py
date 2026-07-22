@@ -60,7 +60,10 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         return None
 
     variacoes = gerar_variacoes_telefone(telefone) if telefone else []
-    marca_info = derivar_marca(conn, cidade=pessoa.get("cidade"), uf_informada=pessoa.get("uf"), telefone_e164=telefone)
+    marca_info = derivar_marca(
+        conn, cidade=pessoa.get("cidade"), uf_informada=pessoa.get("uf"), telefone_e164=telefone,
+        consultor=deal.get("consultor"),
+    )
 
     dados = {
         "nome": nome,

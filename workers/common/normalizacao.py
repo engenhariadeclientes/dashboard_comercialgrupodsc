@@ -173,17 +173,42 @@ def resolver_uf_por_cidade(cidade: Optional[str], conn) -> Optional[str]:
     return "SC" if "SC" in ufs else None
 
 
+def marca_por_nome_consultor(consultor: Optional[str]) -> Optional[str]:
+    """Consultores/responsáveis no Agendor costumam ter a marca no próprio nome
+    (ex.: 'DUPLIQUE - SÃO JOSE', 'DSC - BELO HORIZONTE') — sinal usado por
+    derivar_marca quando não há cidade/UF do lead (decisão 22/07/2026, Stella)."""
+    if not consultor:
+        return None
+    c = normalizar_texto_busca(consultor)
+    if "duplique" in c:
+        return "Duplique"
+    if "dsc" in c:
+        return "DSC"
+    return None
+
+
 def derivar_marca(
     conn,
     cidade: Optional[str] = None,
     uf_informada: Optional[str] = None,
     telefone_e164: Optional[str] = None,
+    consultor: Optional[str] = None,
 ) -> dict:
     """Deriva marca/UF/regiao de um lead — regra de negócio central (4.1.1).
 
-    Ordem: UF explícita > cidade (via IBGE, SC prioritária em empate) >
-    fallback DDD do telefone (uf_derivada_por_ddd=True, confiança menor) >
-    desconhecido (marca=None, "pendente").
+    Ordem: UF explícita/tag > cidade informada pelo lead (via IBGE, SC prioritária
+    em empate) > marca no nome do consultor responsável (Agendor) > default DSC
+    (maioria da base, decisão 22/07/2026 — Stella) quando só há nome de pessoa,
+    sem cidade/região/consultor.
+
+    DECISÕES 22/07/2026 (Stella):
+    - o DDD do telefone NÃO é mais fonte válida pra derivar marca (reverte o
+      fallback original da regra 4.1.1) — DDD indica onde a linha foi
+      comprada/ativada, não onde o condomínio fica. `telefone_e164` é aceito
+      só por compatibilidade de assinatura; não é mais usado na decisão.
+    - quando não há nenhum sinal de localização, o default passa a ser DSC em
+      vez de marca pendente (a maioria da base é DSC e os consultores geralmente
+      confirmam isso pelo nome).
     """
     uf = None
     uf_derivada_por_ddd = False
@@ -193,17 +218,15 @@ def derivar_marca(
     elif cidade:
         uf = resolver_uf_por_cidade(cidade, conn)
 
-    if uf is None and telefone_e164:
-        uf = uf_por_ddd(telefone_e164)
-        uf_derivada_por_ddd = uf is not None
+    if uf is not None:
+        marca = "Duplique" if uf == "SC" else "DSC"
+        return {
+            "marca": marca,
+            "uf": uf,
+            "regiao": REGIAO_POR_UF.get(uf),
+            "uf_derivada_por_ddd": uf_derivada_por_ddd,
+        }
 
-    if uf is None:
-        return {"marca": None, "uf": None, "regiao": None, "uf_derivada_por_ddd": False}
-
-    marca = "Duplique" if uf == "SC" else "DSC"
-    return {
-        "marca": marca,
-        "uf": uf,
-        "regiao": REGIAO_POR_UF.get(uf),
-        "uf_derivada_por_ddd": uf_derivada_por_ddd,
-    }
+    marca_consultor = marca_por_nome_consultor(consultor)
+    marca = marca_consultor or "DSC"
+    return {"marca": marca, "uf": None, "regiao": None, "uf_derivada_por_ddd": False}

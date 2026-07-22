@@ -66,7 +66,10 @@ def _resolver_lead_ou_none(conn, row: dict) -> Optional[int]:
     variacoes = gerar_variacoes_telefone(telefone) if telefone else []
     cidade = row.get("Cidade")
     uf_informada = row.get("Estado")
-    marca_info = derivar_marca(conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone)
+    marca_info = derivar_marca(
+        conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone,
+        consultor=row.get("Usuário responsável"),
+    )
     canal = mapear_canal_origem_agendor(row.get("Origem do cliente"))
 
     dados = {
