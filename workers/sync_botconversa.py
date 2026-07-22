@@ -88,9 +88,15 @@ def _calcular_status_ia(variaveis: dict, tags: list[str], consultor_repasse: Opt
     return "em_conversa", False
 
 
+TAGS_IGNORADAS = {"contato_operacional"}  # contatos não comerciais (decisão da Stella, 22/07/2026)
+
+
 def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) -> None:
     variaveis = sub.get("variables") or {}
     tags = sub.get("tags") or []
+
+    if any(t.strip().lower() in TAGS_IGNORADAS for t in tags):
+        return
 
     nome_raw = sub.get("full_name") or sub.get("first_name")
     email_raw = variaveis.get("Email")
