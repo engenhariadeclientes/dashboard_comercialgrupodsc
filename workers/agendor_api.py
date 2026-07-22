@@ -55,6 +55,9 @@ def _mapear_deal_bruto(bruto: dict) -> dict:
     owner = bruto.get("owner") or {}
     pessoa_resumo = bruto.get("person") or {}
     organizacao = bruto.get("organization") or {}
+    loss_reason = bruto.get("lossReason")
+    if isinstance(loss_reason, dict):
+        loss_reason = loss_reason.get("name")
 
     data_fechamento = _parse_data(bruto.get("wonAt")) or _parse_data(bruto.get("lostAt")) or _parse_data(bruto.get("endTime"))
 
@@ -66,7 +69,7 @@ def _mapear_deal_bruto(bruto: dict) -> dict:
         "consultor": owner.get("name"),
         "valor": bruto.get("value"),
         "status_nome": dealStatus.get("name"),
-        "motivo_perda": bruto.get("lossReason"),
+        "motivo_perda": loss_reason,
         "data_criacao": _parse_data(bruto.get("createdAt")),
         "data_fechamento": data_fechamento,
         "atualizado_em_agendor": _parse_data(bruto.get("updatedAt")),
