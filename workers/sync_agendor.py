@@ -182,7 +182,7 @@ def _processar_deal(conn, deal: dict, agora: datetime) -> None:
     else:
         etapa_anterior = anterior["etapa_atual"]
         funil_anterior = anterior["funil"]
-        valor_anterior = anterior["valor"]
+        valor_anterior = float(anterior["valor"]) if anterior["valor"] is not None else None
         status_anterior = anterior["status"]
 
     etapa_nova = deal.get("etapa")
