@@ -48,6 +48,28 @@ def buscar_pessoa(pessoa_id: int) -> Optional[dict]:
     }
 
 
+def buscar_organizacao(organizacao_id: int) -> Optional[dict]:
+    """GET /v3/organizations/{id} — usado quando o negócio não tem pessoa vinculada,
+    só organização (achado real 22/07/2026: "laurita sasse" cadastrada como
+    organização, não como pessoa — contact/leadOrigin ficam só aqui)."""
+    resp = requests.get(f"{BASE_URL}/organizations/{organizacao_id}", headers=_headers(), timeout=30)
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    d = resp.json().get("data", {})
+    contato = d.get("contact") or {}
+    endereco = d.get("address") or {}
+    lead_origin = d.get("leadOrigin") or {}
+    return {
+        "nome": d.get("name"),
+        "email": d.get("email") or contato.get("email"),
+        "telefone": contato.get("mobile") or contato.get("whatsapp") or contato.get("work"),
+        "cidade": endereco.get("city"),
+        "uf": endereco.get("state"),
+        "origem_detalhe": lead_origin.get("name"),
+    }
+
+
 def _mapear_deal_bruto(bruto: dict) -> dict:
     dealStage = bruto.get("dealStage") or {}
     funnel = dealStage.get("funnel") or {}
@@ -76,6 +98,7 @@ def _mapear_deal_bruto(bruto: dict) -> dict:
         "pessoa_id": pessoa_resumo.get("id"),
         "pessoa_nome_resumo": pessoa_resumo.get("name"),
         "pessoa_email_resumo": pessoa_resumo.get("email"),
+        "organizacao_id": organizacao.get("id"),
         "organizacao_nome": organizacao.get("name"),
         "payload_bruto": bruto,
     }

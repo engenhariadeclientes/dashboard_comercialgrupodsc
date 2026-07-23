@@ -15,7 +15,7 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from workers.agendor_api import buscar_pessoa, listar_deals  # noqa: E402
+from workers.agendor_api import buscar_organizacao, buscar_pessoa, listar_deals  # noqa: E402
 from workers.common.db import get_connection  # noqa: E402
 from workers.common.eventos import registrar_evento  # noqa: E402
 from workers.common.matching import atualizar_campos_lead, resolver_ou_criar_lead  # noqa: E402
@@ -32,6 +32,7 @@ from workers.common.regras_negocio import (  # noqa: E402
     eh_etapa_proposta_enviada,
     eh_nome_jornada_porter,
     extrair_regiao_jornada_porter,
+    mapear_canal_origem_agendor,
     mapear_status,
 )
 from workers.common.sync_state import registrar_sync  # noqa: E402
@@ -45,12 +46,23 @@ FONTE = "agendor"
 
 def _resolver_lead(conn, deal: dict) -> Optional[int]:
     pessoa_id = deal.get("pessoa_id")
-    if pessoa_id is None:
-        return None
+    organizacao_id = deal.get("organizacao_id")
 
-    pessoa = buscar_pessoa(pessoa_id) or {}
-    nome_raw = pessoa.get("nome") or deal.get("pessoa_nome_resumo")
-    email_raw = pessoa.get("email") or deal.get("pessoa_email_resumo")
+    origem_detalhe_org = None
+    if pessoa_id is not None:
+        pessoa = buscar_pessoa(pessoa_id) or {}
+        nome_raw = pessoa.get("nome") or deal.get("pessoa_nome_resumo")
+        email_raw = pessoa.get("email") or deal.get("pessoa_email_resumo")
+    elif organizacao_id is not None:
+        # negócio sem pessoa vinculada, só organização — achado real 22/07/2026
+        # ("laurita sasse" cadastrada como organização, não como pessoa): o
+        # contato (telefone/e-mail/origem) só existe no registro da organização
+        pessoa = buscar_organizacao(organizacao_id) or {}
+        nome_raw = pessoa.get("nome") or deal.get("organizacao_nome")
+        email_raw = pessoa.get("email")
+        origem_detalhe_org = pessoa.get("origem_detalhe")
+    else:
+        return None
 
     nome = normalizar_nome(nome_raw)
     email = normalizar_email(email_raw)
@@ -73,6 +85,10 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         canal_entrada = "evento"
         regiao_jp = extrair_regiao_jornada_porter(nome_raw)
         campanha_entrada = f"Jornada_Porter_{regiao_jp}" if regiao_jp else "Jornada_Porter"
+    elif origem_detalhe_org:
+        # leadOrigin da organização (ex.: "Redes Sociais" -> meta_ads)
+        canal_entrada = mapear_canal_origem_agendor(origem_detalhe_org)
+        campanha_entrada = None
     else:
         canal_entrada = "organico"
         campanha_entrada = None
@@ -90,6 +106,7 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
         "canal_entrada": canal_entrada,
         "campanha_entrada": campanha_entrada,
+        "origem_detalhe_entrada": origem_detalhe_org,
         "data_entrada": deal.get("data_criacao") or datetime.now(timezone.utc),
         "payload": {"origem": "sync_agendor", "organizacao": pessoa.get("organizacao_nome") or deal.get("organizacao_nome")},
     }
