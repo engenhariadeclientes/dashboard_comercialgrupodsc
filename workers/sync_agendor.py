@@ -184,7 +184,11 @@ def _processar_deal(conn, deal: dict, agora: datetime) -> None:
         return
 
     anterior = _buscar_negocio_atual(conn, agendor_id)
-    lead_id = anterior["lead_id"] if anterior else _resolver_lead(conn, deal)
+    # se o negócio já existe mas nunca conseguiu resolver um lead (comum nos
+    # importados pela carga histórica original, que não olhava organização),
+    # tenta de novo a cada sync em vez de carregar o NULL pra sempre — decisão
+    # da Stella (23/07/2026): "todos os negócios precisam estar na nossa lista"
+    lead_id = anterior["lead_id"] if anterior and anterior["lead_id"] is not None else _resolver_lead(conn, deal)
     novo_status = mapear_status(deal.get("status_nome"))
 
     _upsert_negocio(conn, deal, lead_id)
