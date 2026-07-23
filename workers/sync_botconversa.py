@@ -98,7 +98,7 @@ def _calcular_status_ia(variaveis: dict, tags: list[str], houve_repasse: bool) -
     return "em_conversa", False
 
 
-TAGS_IGNORADAS = {"contato_operacional"}  # contatos não comerciais (decisão da Stella, 22/07/2026)
+TAGS_IGNORADAS = {"contato_operacional", "whatsappsinvalidos"}  # contatos não comerciais / sem WhatsApp válido
 
 
 def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) -> None:
@@ -118,7 +118,11 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
     if invalido:
         telefone = None
 
-    if not (nome or email or telefone):
+    # nome sozinho não basta: sem telefone/e-mail não há como casar com um lead
+    # existente nem evitar recriar um novo a cada sync (achado real 23/07/2026:
+    # 74 leads "fantasma" duplicados assim — "Therezinha Dsc" x24, "Andrea" x26,
+    # "Bruna Karolina" x24 — todos sem contato, WhatsApp inválido)
+    if not (email or telefone):
         return
 
     houve_repasse, consultor_repasse = _detectar_repasse(tags)
