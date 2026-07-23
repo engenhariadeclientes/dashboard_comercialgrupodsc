@@ -56,7 +56,11 @@ def _melhor_telefone(row: dict) -> Optional[str]:
 
 
 def _resolver_lead_ou_none(conn, row: dict) -> Optional[int]:
-    nome = normalizar_nome(row.get("Pessoa relacionada"))
+    # quando não há pessoa vinculada, mas há empresa/organização, a planilha do
+    # Agendor já traz o telefone/e-mail da organização nas mesmas colunas —
+    # só faltava usar o nome da empresa como fallback (decisão da Stella, 23/07/2026)
+    nome_fonte = row.get("Pessoa relacionada") or row.get("Empresa relacionada")
+    nome = normalizar_nome(nome_fonte)
     email = normalizar_email(row.get("E-mail"))
     telefone = _melhor_telefone(row)
 
@@ -72,10 +76,9 @@ def _resolver_lead_ou_none(conn, row: dict) -> Optional[int]:
         conn, cidade=cidade, uf_informada=uf_informada, telefone_e164=telefone,
         consultor=row.get("Usuário responsável"),
     )
-    nome_raw_pessoa = row.get("Pessoa relacionada")
-    if eh_nome_jornada_porter(nome_raw_pessoa):
+    if eh_nome_jornada_porter(nome_fonte):
         canal = "evento"
-        regiao_jp = extrair_regiao_jornada_porter(nome_raw_pessoa)
+        regiao_jp = extrair_regiao_jornada_porter(nome_fonte)
         campanha = f"Jornada_Porter_{regiao_jp}" if regiao_jp else "Jornada_Porter"
     else:
         canal = mapear_canal_origem_agendor(row.get("Origem do cliente"))
