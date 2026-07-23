@@ -7,6 +7,9 @@ por serviço só pra trocar o comando de start.
 """
 import os
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 WORKER = os.environ.get("WORKER", "sync_agendor")
 
