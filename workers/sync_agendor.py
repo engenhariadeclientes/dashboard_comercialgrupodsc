@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+import requests
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from workers.agendor_api import buscar_organizacao, buscar_pessoa, listar_deals  # noqa: E402
@@ -250,18 +252,32 @@ def _processar_deal(conn, deal: dict, agora: datetime) -> None:
 def rodar() -> None:
     agora = datetime.now(timezone.utc)
     processados = 0
+    interrompido_por_erro_api = False
     with get_connection() as conn:
-        for deal in listar_deals():
-            try:
-                _processar_deal(conn, deal, agora)
-                processados += 1
-            except Exception:
-                logger.exception("Falha processando deal %s", deal.get("agendor_negocio_id"))
-                conn.rollback()
-                continue
-            conn.commit()
+        try:
+            for deal in listar_deals():
+                try:
+                    _processar_deal(conn, deal, agora)
+                    processados += 1
+                except Exception:
+                    logger.exception("Falha processando deal %s", deal.get("agendor_negocio_id"))
+                    conn.rollback()
+                    continue
+                conn.commit()
+        except requests.exceptions.RequestException:
+            # API do Agendor instável mesmo após retry (ver agendor_api.py) — não
+            # derruba o worker, guarda o que já processou e tenta de novo no
+            # próximo ciclo (roda a cada 30 min via cron Railway)
+            logger.exception(
+                "Falha ao buscar deals na API do Agendor; sync interrompido com %d processados",
+                processados,
+            )
+            interrompido_por_erro_api = True
 
-        registrar_sync(conn, WORKER, agora, detalhes={"deals_processados": processados})
+        registrar_sync(
+            conn, WORKER, agora,
+            detalhes={"deals_processados": processados, "interrompido_por_erro_api": interrompido_por_erro_api},
+        )
         conn.commit()
 
     logger.info("sync_agendor concluído: %d deals processados", processados)

@@ -9,8 +9,25 @@ from datetime import datetime
 from typing import Iterator, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 BASE_URL = "https://api.agendor.com.br/v3"
+TIMEOUT = 60  # segundos — a API do Agendor às vezes demora em páginas grandes
+
+# a API do Agendor volta a responder normal após um timeout pontual (visto em
+# produção 12/08/2026: crash do worker inteiro por 1 ReadTimeout em meio a ~10k
+# deals) — retry com backoff em vez de derrubar o processo
+_retry = Retry(
+    total=4,
+    connect=4,
+    read=4,
+    backoff_factor=2,
+    status_forcelist=(500, 502, 503, 504),
+    allowed_methods=frozenset(["GET"]),
+)
+_session = requests.Session()
+_session.mount("https://", HTTPAdapter(max_retries=_retry))
 
 
 def _headers() -> dict:
@@ -30,7 +47,7 @@ def _parse_data(valor) -> Optional[datetime]:
 def buscar_pessoa(pessoa_id: int) -> Optional[dict]:
     """GET /v3/people/{id} — usado para telefone (contact.mobile) e cidade/UF
     (address.city/state), que não vêm no objeto `person` resumido de /deals."""
-    resp = requests.get(f"{BASE_URL}/people/{pessoa_id}", headers=_headers(), timeout=30)
+    resp = _session.get(f"{BASE_URL}/people/{pessoa_id}", headers=_headers(), timeout=TIMEOUT)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
@@ -52,7 +69,7 @@ def buscar_organizacao(organizacao_id: int) -> Optional[dict]:
     """GET /v3/organizations/{id} — usado quando o negócio não tem pessoa vinculada,
     só organização (achado real 22/07/2026: "laurita sasse" cadastrada como
     organização, não como pessoa — contact/leadOrigin ficam só aqui)."""
-    resp = requests.get(f"{BASE_URL}/organizations/{organizacao_id}", headers=_headers(), timeout=30)
+    resp = _session.get(f"{BASE_URL}/organizations/{organizacao_id}", headers=_headers(), timeout=TIMEOUT)
     if resp.status_code == 404:
         return None
     resp.raise_for_status()
@@ -110,7 +127,7 @@ def listar_deals() -> Iterator[dict]:
     params = {"page": 1, "per_page": 100}
 
     while url:
-        resp = requests.get(url, headers=_headers(), params=params, timeout=30)
+        resp = _session.get(url, headers=_headers(), params=params, timeout=TIMEOUT)
         resp.raise_for_status()
         corpo = resp.json()
 
