@@ -16,7 +16,13 @@ def registrar_evento(
     origem_detalhe: Optional[str] = None,
     payload: Optional[dict] = None,
 ) -> Optional[int]:
-    """Insere o evento; se já existir (mesma fonte/tipo/lead/data_evento), não duplica."""
+    """Insere o evento; se já existir (mesma fonte/tipo/lead/data_evento), não duplica.
+
+    Também atualiza `leads.data_ultima_conversao` com a data deste evento, quando
+    mais recente que a já registrada — é o sinal de "última conversão" usado nas
+    análises de gestão (seção 019 da migration), diferente de `atualizado_em`, que
+    muda a cada ciclo de sync mesmo sem nenhuma novidade real.
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -28,4 +34,16 @@ def registrar_evento(
             (lead_id, fonte, tipo_evento, canal, campanha, origem_detalhe, Jsonb(payload) if payload is not None else None, data_evento),
         )
         row = cur.fetchone()
-        return row["id"] if row else None
+        evento_id = row["id"] if row else None
+
+        if evento_id is not None and lead_id is not None:
+            cur.execute(
+                """
+                UPDATE leads
+                SET data_ultima_conversao = GREATEST(COALESCE(data_ultima_conversao, %s), %s)
+                WHERE id = %s
+                """,
+                (data_evento, data_evento, lead_id),
+            )
+
+        return evento_id
