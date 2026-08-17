@@ -12,7 +12,7 @@ Sistema de rastreabilidade de leads (do anúncio à venda). Especificação comp
 - `workers/` — processos agendados (cron Railway), ex.: `sync_agendor.py`
   - `workers/common/` — normalização, matching, eventos, config — compartilhado por workers e importers
 - `importers/` — scripts de carga inicial (rodados uma vez, manualmente)
-- `config/` — `form_field_map.yml` e `rd_exclusoes.yml`, editáveis sem mexer em código
+- `config/` — `form_field_map.yml`, `rd_exclusoes.yml` e `prospeccao_google.yml`, editáveis sem mexer em código
 - `docs/` — especificação
 
 ## Setup local

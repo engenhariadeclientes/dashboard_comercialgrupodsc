@@ -1,0 +1,36 @@
+# Configuração da prospecção ativa via Google Places API — worker prospeccao_google
+# Editável sem mexer em código (mesmo padrão de form_field_map.yml).
+#
+# categorias: cada item vira uma query de texto na Places API (Text Search),
+#   combinada com cada cidade abaixo (query = "<query> em <cidade>").
+# cidades: lista inicial de capitais/regiões metropolitanas. Expandir por rodada
+#   conforme decisão de 17/08/2026 (cobertura Brasil, começando pelas cidades
+#   maiores/mais familiarizadas com IA).
+
+categorias:
+  - id: administradora_condominio
+    query: "administradora de condomínios"
+  - id: escritorio_cobranca
+    query: "escritório de cobrança"
+  - id: garantidora_receita
+    query: "garantidora de receita condominial"
+
+cidades:
+  - "São Paulo, SP"
+  - "Rio de Janeiro, RJ"
+  - "Belo Horizonte, MG"
+  - "Curitiba, PR"
+  - "Porto Alegre, RS"
+  - "Florianópolis, SC"
+  - "Joinville, SC"
+  - "Blumenau, SC"
+  - "Brasília, DF"
+  - "Salvador, BA"
+  - "Recife, PE"
+  - "Fortaleza, CE"
+  - "Goiânia, GO"
+  - "Campinas, SP"
+
+# Máximo de resultados por query (Places API Text Search pagina de 20 em 20,
+# até 60 no total por query sem paginação por localização/raio).
+max_resultados_por_query: 60
