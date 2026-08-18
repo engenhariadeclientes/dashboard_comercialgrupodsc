@@ -80,7 +80,6 @@ Todo lead e todo evento carregam estes 3 campos. Valores fechados — nunca text
 | `site` | Cadastro espontâneo nos formulários dos sites institucionais (sem UTM de origem paga) |
 | `indicacao` | Indicação/parceiro |
 | `organico` | Demais entradas espontâneas (WhatsApp direto, telefone) |
-| `prospeccao_google` | Prospecção ativa outbound via Google Places API (worker `prospeccao_google`) — entra em fila para abordagem manual do consultor, sem disparo automático de WhatsApp (risco de bloqueio do número comercial em contato frio) |
 | `outro` | Exceções (exige preenchimento de `origem_detalhe`) |
 
 ### 3.2 `campanha` (texto padronizado)
@@ -341,14 +340,6 @@ Contato Pré-Vendas Efetivados → Contato de Apresentação → Follow Up → L
 
 *Funil Vendas:*
 Prospecção PAP/Eventos/Outbound → Contato Inicial → Follow Up do Contato → Solicitação de Documentação → Reunião com Síndico/Conselho → **Proposta Enviada** → AGO/AGE/AGI → Aguardando Documentação → Análise Documentação → Assinatura de Contrato
-
-### 5.6 Google Places API — worker `prospeccao_google`, sob demanda (cron manual/periódico)
-- Prospecção ativa outbound: busca empresas por categoria + cidade (`config/prospeccao_google.yml`, editável sem mexer em código — segue o padrão de `form_field_map.yml`)
-- **Escopo inicial (decisão 17/08/2026, Stella):** administradoras de condomínio, escritórios de cobrança e garantidoras de receita. Cobertura Brasil, começando pelas capitais/regiões metropolitanas já listadas no config e expandindo por rodada
-- `GET Places API (Text Search)` por `categoria + cidade` → nome do estabelecimento, telefone, endereço/cidade/UF
-- Upsert em `leads`: `canal_entrada=prospeccao_google`, `campanha_entrada=<categoria>`, `origem_detalhe_entrada=<cidade>`, `tipo_captura=prospeccao_ativa`; telefone ausente/inválido → não entra (sem forma de contato)
-- **Sem disparo automático de WhatsApp** (decisão 17/08/2026): contato frio via WhatsApp Business API exige template pré-aprovado pela Meta e o risco de bloqueio do número comercial não compensa para esta fase. O lead entra na base com `passou_ia=false` e aparece no dash como fila para abordagem manual do consultor. Reavaliar disparo por template aprovado como evolução futura, uma vez existindo WhatsApp Business API oficial configurada
-- Variável `GOOGLE_PLACES_API_KEY` no Railway; idempotente por telefone (constraint UNIQUE de `leads.telefone` já existente)
 
 **IMPORTANTE — sem amarração canal × funil:** qualquer lead, de qualquer canal (inclusive qualificado pela Júlia), pode nascer em qualquer um dos dois funis. O sistema apenas registra o funil onde o negócio está (`negocios.funil`) e o disponibiliza como filtro no dash. Nenhuma regra de validação ou alerta de "funil errado".
 
