@@ -1,4 +1,5 @@
--- Schema do "Chefe de Projetos" — banco próprio, separado do Motor Comercial.
+-- Schema do app "CEO" da Engenharia de Clientes — banco próprio, separado do
+-- Motor Comercial (esse é do cliente Grupo DSC/Duplique).
 -- Rodar com: python seed.py (cria as tabelas e popula os dados iniciais)
 
 create extension if not exists pgcrypto;

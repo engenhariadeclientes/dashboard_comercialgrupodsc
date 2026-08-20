@@ -1,11 +1,25 @@
-# CEO — Grupo DSC
+# CEO — Engenharia de Clientes
 
-App de gestão interna: cada pessoa vê e atualiza suas próprias tarefas, e a
-Stella (CEO) tem uma visão geral de tudo, cadastra pessoas/projetos/agentes de
-IA e pode reatribuir qualquer tarefa — sem precisar cobrar manualmente.
+> **Atenção — não confundir as empresas:**
+> - **Engenharia de Clientes** é a empresa da Stella. Este app (`chefe_projetos/`)
+>   é dela — a equipe (Stella, Daniela, Leonardo, Gustavo), os projetos/campanhas
+>   e os agentes de IA cadastrados aqui pertencem à Engenharia de Clientes.
+> - **Grupo DSC/Duplique** é um **cliente** da Engenharia de Clientes. O restante
+>   deste repositório (`sql/`, `workers/`, `importers/` — o "Motor Comercial") é
+>   o sistema de rastreabilidade de leads **desse cliente**, não da própria
+>   Engenharia de Clientes.
+> - Este app só está neste repositório porque foi o único ao qual esta sessão
+>   tinha acesso; ele não lê nem grava nada no banco do Motor Comercial (tem
+>   `DATABASE_URL` próprio). Ver "Próximos passos" abaixo sobre migrar para um
+>   repositório próprio da Engenharia de Clientes.
 
-Banco de dados próprio, totalmente separado do Motor Comercial (que é um
-sistema de um cliente, não da Engenharia de Clientes).
+App de gestão interna da Engenharia de Clientes: cada pessoa vê e atualiza
+suas próprias tarefas, e a Stella (CEO) tem uma visão geral de tudo, cadastra
+pessoas/projetos/agentes de IA e pode reatribuir qualquer tarefa — sem
+precisar cobrar manualmente.
+
+Banco de dados próprio, totalmente separado do Motor Comercial (que é do
+cliente Grupo DSC/Duplique, não da Engenharia de Clientes).
 
 ## O que já faz
 

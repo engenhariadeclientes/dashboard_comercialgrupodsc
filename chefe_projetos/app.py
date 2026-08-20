@@ -1,3 +1,5 @@
+# App "CEO" da Engenharia de Clientes — não confundir com o Motor Comercial
+# deste mesmo repositório, que pertence ao cliente Grupo DSC/Duplique.
 import os
 from datetime import date, timedelta
 
