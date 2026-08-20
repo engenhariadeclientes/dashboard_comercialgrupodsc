@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Chefe de Projetos{% endblock %}</title>
+  <link rel="stylesheet" href="/static/estilo.css">
+</head>
+<body>
+  {% if pessoa %}
+  <header class="topo">
+    <span class="marca">Chefe de Projetos</span>
+    <nav>
+      <a href="/board">Meu quadro</a>
+      {% if pessoa.eh_chefe %}<a href="/chefe">Visão geral</a>{% endif %}
+      <a href="/logout">Sair ({{ pessoa.nome }})</a>
+    </nav>
+  </header>
+  {% endif %}
+  <main class="conteudo">
+    {% block conteudo %}{% endblock %}
+  </main>
+</body>
+</html>
