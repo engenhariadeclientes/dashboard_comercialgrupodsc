@@ -112,7 +112,27 @@ form button {
 .status-em_andamento .pill { background: #dbeafe; color: var(--andamento); }
 .status-concluida .pill { background: #dcfce7; color: var(--concluida); }
 .status-pendente .pill { background: #fef3e2; color: var(--pendente); }
+.status-ativo .pill { background: #dcfce7; color: var(--concluida); }
+.status-com_erro .pill { background: #fee2e2; color: #b91c1c; }
+.status-pausado .pill { background: #f0eee9; color: var(--texto-suave); }
+tr.status-com_erro { background: #fef2f2; }
 
 .tabela-projetos { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--borda); border-radius: 10px; overflow: hidden; }
 .tabela-projetos th, .tabela-projetos td { text-align: left; padding: 0.6rem 1rem; border-bottom: 1px solid var(--borda); }
 .tabela-projetos th { color: var(--texto-suave); font-size: 0.8rem; text-transform: uppercase; }
+.tabela-projetos td select, .tabela-projetos td input[type="text"] { padding: 0.35rem; margin: 0; font-size: 0.85rem; }
+.linha-form { display: contents; }
+
+.grade-admin { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1.5rem; }
+.cartao-link {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 1.25rem;
+  text-decoration: none;
+  color: var(--texto);
+}
+.cartao-link:hover { border-color: var(--acento); }
+.cartao-link h2 { margin: 0 0 0.4rem; font-size: 1.05rem; color: var(--acento); }
+.cartao-link p { margin: 0; color: var(--texto-suave); font-size: 0.85rem; }

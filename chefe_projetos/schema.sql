@@ -8,6 +8,8 @@ create table if not exists pessoas (
     nome text not null,
     cargo text not null,
     eh_chefe boolean not null default false,
+    skills text not null default '',  -- tags separadas por vírgula, ex.: "automação, ia, suporte"
+    ativo boolean not null default true,
     pin_hash text,                -- null até a pessoa definir o PIN no primeiro acesso
     criado_em timestamptz not null default now()
 );
@@ -49,3 +51,18 @@ create table if not exists tarefas (
 
 create index if not exists idx_tarefas_pessoa_data on tarefas (pessoa_id, data_referencia);
 create index if not exists idx_tarefas_status on tarefas (status);
+
+-- Agentes de IA em produção, monitorados pela CS (Daniela e afins)
+create table if not exists agentes_ia (
+    id uuid primary key default gen_random_uuid(),
+    nome text not null,
+    cliente text,                 -- para quem o agente foi entregue
+    projeto_id uuid references projetos(id),
+    responsavel_id uuid references pessoas(id),
+    status text not null default 'ativo',  -- 'ativo' | 'com_erro' | 'pausado'
+    observacoes text,
+    criado_em timestamptz not null default now(),
+    atualizado_em timestamptz not null default now()
+);
+
+create index if not exists idx_agentes_ia_status on agentes_ia (status);

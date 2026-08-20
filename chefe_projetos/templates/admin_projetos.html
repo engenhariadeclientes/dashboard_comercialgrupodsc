@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block titulo %}Projetos — Admin{% endblock %}
+{% block conteudo %}
+<h1>Projetos e campanhas</h1>
+<p class="ajuda"><a href="/admin">&larr; Admin</a></p>
+
+<table class="tabela-projetos">
+  <thead><tr><th>Nome</th><th>Tipo</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+    {% for p in projetos %}
+    <tr>
+      <td>{{ p.nome }}</td>
+      <td>{{ p.tipo }}</td>
+      <td>{{ "Ativo" if p.ativo else "Inativo" }}</td>
+      <td>
+        <form method="post" action="/admin/projetos/{{ p.id }}/toggle">
+          <button type="submit">{{ "Desativar" if p.ativo else "Reativar" }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<details class="nova-tarefa">
+  <summary>+ Cadastrar novo projeto/campanha</summary>
+  <form method="post" action="/admin/projetos">
+    <label for="nome">Nome</label>
+    <input type="text" name="nome" id="nome" required>
+    <label for="tipo">Tipo</label>
+    <select name="tipo" id="tipo">
+      <option value="campanha">Campanha comercial</option>
+      <option value="operacao">Operação interna</option>
+      <option value="carteira">Gestão de carteira</option>
+    </select>
+    <button type="submit">Cadastrar</button>
+  </form>
+</details>
+{% endblock %}

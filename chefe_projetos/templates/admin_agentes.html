@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block titulo %}Agentes de IA — Admin{% endblock %}
+{% block conteudo %}
+<h1>Agentes de IA</h1>
+<p class="ajuda"><a href="/admin">&larr; Admin</a> — todos os agentes de IA em produção que a CS monitora.</p>
+
+<table class="tabela-projetos">
+  <thead><tr><th>Agente</th><th>Cliente</th><th>Projeto</th><th>Responsável</th><th>Status</th><th>Observações</th><th></th></tr></thead>
+  <tbody>
+    {% for a in agentes %}
+    <tr>
+      <form class="linha-form" method="post" action="/admin/agentes/{{ a.id }}">
+        <td>{{ a.nome }}</td>
+        <td>{{ a.cliente or "—" }}</td>
+        <td>{{ a.projeto_nome or "—" }}</td>
+        <td>
+          <select name="responsavel_id">
+            <option value="">—</option>
+            {% for p in pessoas %}
+            <option value="{{ p.id }}" {% if a.responsavel_id == p.id %}selected{% endif %}>{{ p.nome }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td>
+          <select name="status">
+            {% for s, label in status_agente_label.items() %}
+            <option value="{{ s }}" {% if s == a.status %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td><input type="text" name="observacoes" value="{{ a.observacoes or '' }}"></td>
+        <td><button type="submit">Salvar</button></td>
+      </form>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="vazio">Nenhum agente cadastrado ainda.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<details class="nova-tarefa">
+  <summary>+ Cadastrar novo agente de IA</summary>
+  <form method="post" action="/admin/agentes">
+    <label for="nome">Nome do agente</label>
+    <input type="text" name="nome" id="nome" required placeholder="ex.: Assistente de Cobrança — Cliente X">
+    <label for="cliente">Cliente</label>
+    <input type="text" name="cliente" id="cliente">
+    <label for="projeto_id">Projeto/campanha</label>
+    <select name="projeto_id" id="projeto_id">
+      <option value="">—</option>
+      {% for p in projetos %}
+      <option value="{{ p.id }}">{{ p.nome }}</option>
+      {% endfor %}
+    </select>
+    <label for="responsavel_id">Responsável</label>
+    <select name="responsavel_id" id="responsavel_id">
+      <option value="">—</option>
+      {% for p in pessoas %}
+      <option value="{{ p.id }}">{{ p.nome }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Cadastrar</button>
+  </form>
+</details>
+{% endblock %}

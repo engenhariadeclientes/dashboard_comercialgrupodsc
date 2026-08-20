@@ -7,10 +7,10 @@ from pathlib import Path
 from db import get_conn
 
 PESSOAS = [
-    ("Stella", "Diretora Estratégica / Gestora de Projetos", True),
-    ("Daniela", "Coordenadora de CS", False),
-    ("Leonardo", "Estagiário Tech Marketing", False),
-    ("Gustavo", "Vídeo Maker / Editor", False),
+    ("Stella", "Diretora Estratégica / Gestora de Projetos", True, "estratégia, comercial, tráfego, social media, closer, gestão de carteira"),
+    ("Daniela", "Coordenadora de CS", False, "cs, atendimento, ia, agentes, monitoramento, qualidade"),
+    ("Leonardo", "Estagiário Tech Marketing", False, "automação, tech, ti, suporte, ia"),
+    ("Gustavo", "Vídeo Maker / Editor", False, "vídeo, edição, social media, stories"),
 ]
 
 PROJETOS = [
@@ -64,15 +64,20 @@ def run():
         cur.execute(schema_sql)
 
         pessoa_ids = {}
-        for nome, cargo, eh_chefe in PESSOAS:
+        for nome, cargo, eh_chefe, skills in PESSOAS:
             cur.execute("select id from pessoas where nome = %s", (nome,))
             row = cur.fetchone()
             if row:
                 pessoa_ids[nome] = row["id"]
+                # preenche skills só se ainda não foi editado manualmente
+                cur.execute(
+                    "update pessoas set skills = %s where id = %s and skills = ''",
+                    (skills, row["id"]),
+                )
                 continue
             cur.execute(
-                "insert into pessoas (nome, cargo, eh_chefe) values (%s, %s, %s) returning id",
-                (nome, cargo, eh_chefe),
+                "insert into pessoas (nome, cargo, eh_chefe, skills) values (%s, %s, %s, %s) returning id",
+                (nome, cargo, eh_chefe, skills),
             )
             pessoa_ids[nome] = cur.fetchone()["id"]
 
