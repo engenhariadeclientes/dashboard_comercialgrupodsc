@@ -17,7 +17,7 @@ var WEBHOOK_URL = 'https://webhook-form-leads-production.up.railway.app/webhook/
 
 var PERGUNTAS = {
   nome: 'Nome completo',
-  email: 'E-mail',
+  email: 'Enviar e-mail',
   telefone: 'Número de telefone',
   cidade: 'Cidade',
   estado: 'Estado',
