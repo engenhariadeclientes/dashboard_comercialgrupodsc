@@ -15,9 +15,7 @@ command configurado direto no Railway (gunicorn api.app:app).
 """
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request
 
@@ -36,11 +34,10 @@ from workers.common.normalizacao import (  # noqa: E402
     gerar_variacoes_telefone,
     normalizar_email,
     normalizar_nome,
+    normalizar_texto_busca,
 )
 
 app = Flask(__name__)
-
-TZ_BR = ZoneInfo("America/Sao_Paulo")
 
 CONTAS = {
     "DSC": "BOTCONVERSA_API_KEY_DSC",
@@ -80,17 +77,26 @@ def _buscar_ou_criar_subscriber(api_key: str, telefone_e164: str, nome: str) -> 
 
 
 def _mapa_custom_fields(api_key: str) -> dict:
-    return {c["key"]: c["id"] for c in listar_custom_fields(api_key)}
+    """Mapa chave-exata -> id, mais um indice normalizado (sem acento/caixa) como
+    fallback — a grafia real na conta as vezes diverge da documentada (ja visto
+    com 'Canal de Aquisição' vs 'canal-aquisicao', 'primeiro_nome' vs
+    'primeiro-nome'), entao um campo so falha de verdade se nem a forma
+    normalizada bater com nada."""
+    campos = list(listar_custom_fields(api_key))
+    exato = {c["key"]: c["id"] for c in campos}
+    normalizado = {normalizar_texto_busca(c["key"]): c["id"] for c in campos}
+    return exato, normalizado
 
 
 def _preencher_campos(api_key: str, subscriber_id: int, campos: dict) -> dict:
-    """Aplica os campos que existirem no mapa; retorna {aplicados: [...], ausentes: [...]}."""
-    campo_map = _mapa_custom_fields(api_key)
+    """Aplica os campos que existirem no mapa (exato ou normalizado); retorna
+    {aplicados: [...], ausentes: [...]}."""
+    exato, normalizado = _mapa_custom_fields(api_key)
     aplicados, ausentes = [], []
     for chave, valor in campos.items():
         if valor in (None, ""):
             continue
-        campo_id = campo_map.get(chave)
+        campo_id = exato.get(chave) or normalizado.get(normalizar_texto_busca(chave))
         if campo_id is None:
             ausentes.append(chave)
             continue
@@ -144,12 +150,11 @@ def webhook_formulario_lead():
 
         regiao = " - ".join(p for p in (cidade, estado) if p) or None
         campos = {
-            "primeiro-nome": (nome or "").split(" ", 1)[0] or None,
+            "primeiro_nome": (nome or "").split(" ", 1)[0] or None,
             "Email": email,
-            "canal-aquisicao": CANAL_AQUISICAO_FORMULARIO,
+            "Canal de Aquisição": CANAL_AQUISICAO_FORMULARIO,
             "cargo-funcao": cargo or None,
-            "regiao": regiao,
-            "data-inscricao": datetime.now(TZ_BR).strftime("%d.%m.%Y"),
+            "REGIÃO": regiao,
         }
         resultado_campos = _preencher_campos(api_key, subscriber_id, campos)
 
