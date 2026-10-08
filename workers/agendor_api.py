@@ -45,8 +45,9 @@ def _parse_data(valor) -> Optional[datetime]:
 
 
 def buscar_pessoa(pessoa_id: int) -> Optional[dict]:
-    """GET /v3/people/{id} — usado para telefone (contact.mobile) e cidade/UF
-    (address.city/state), que não vêm no objeto `person` resumido de /deals."""
+    """GET /v3/people/{id} — usado para telefone (contact.mobile), cidade/UF
+    (address.city/state) e origem/categoria (leadOrigin/category), que não vêm no
+    objeto `person` resumido de /deals."""
     resp = _session.get(f"{BASE_URL}/people/{pessoa_id}", headers=_headers(), timeout=TIMEOUT)
     if resp.status_code == 404:
         return None
@@ -62,6 +63,8 @@ def buscar_pessoa(pessoa_id: int) -> Optional[dict]:
         "uf": endereco.get("state"),
         "profissao_funcao": d.get("role"),
         "organizacao_nome": (d.get("organization") or {}).get("name"),
+        "origem_detalhe": (d.get("leadOrigin") or {}).get("name"),
+        "categoria": (d.get("category") or {}).get("name"),
     }
 
 

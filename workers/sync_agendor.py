@@ -18,6 +18,7 @@ import requests
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from workers.agendor_api import buscar_organizacao, buscar_pessoa, listar_deals  # noqa: E402
+from workers.common.canais import CANAIS_PAGOS, deve_substituir_canal  # noqa: E402
 from workers.common.db import get_connection  # noqa: E402
 from workers.common.eventos import registrar_evento  # noqa: E402
 from workers.common.matching import atualizar_campos_lead, resolver_ou_criar_lead  # noqa: E402
@@ -32,9 +33,10 @@ from workers.common.regras_negocio import (  # noqa: E402
     eh_etapa_assinatura_contrato,
     eh_etapa_lead_sem_perfil,
     eh_etapa_proposta_enviada,
+    campanha_evento_agendor,
+    canal_concreto_origem_agendor,
     eh_nome_jornada_porter,
     extrair_regiao_jornada_porter,
-    mapear_canal_origem_agendor,
     mapear_status,
 )
 from workers.common.sync_state import registrar_sync  # noqa: E402
@@ -50,7 +52,6 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
     pessoa_id = deal.get("pessoa_id")
     organizacao_id = deal.get("organizacao_id")
 
-    origem_detalhe_org = None
     if pessoa_id is not None:
         pessoa = buscar_pessoa(pessoa_id) or {}
         nome_raw = pessoa.get("nome") or deal.get("pessoa_nome_resumo")
@@ -62,9 +63,11 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         pessoa = buscar_organizacao(organizacao_id) or {}
         nome_raw = pessoa.get("nome") or deal.get("organizacao_nome")
         email_raw = pessoa.get("email")
-        origem_detalhe_org = pessoa.get("origem_detalhe")
     else:
         return None
+    # "Origem do cliente" da pessoa ou, sem pessoa, da organização (até 07/10/2026
+    # só a da organização era lida — origem cadastrada na pessoa se perdia)
+    origem_detalhe = pessoa.get("origem_detalhe")
 
     nome = normalizar_nome(nome_raw)
     email = normalizar_email(email_raw)
@@ -83,17 +86,23 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
 
     # sinal do nome (seção "Jornada Porter" — decisão 22/07/2026): o Agendor sozinho
     # não sabe a origem real do contato, mas o nome costuma denunciar "JP-<região>"
-    if eh_nome_jornada_porter(nome_raw):
+    canal_origem = canal_concreto_origem_agendor(origem_detalhe)
+    campanha_evento = campanha_evento_agendor(pessoa.get("categoria"), deal.get("funil"))
+    if canal_origem in CANAIS_PAGOS:
+        # anúncio pago prevalece sobre qualquer outro sinal (decisão de 07/10/2026)
+        canal_entrada, campanha_entrada = canal_origem, None
+    elif eh_nome_jornada_porter(nome_raw):
         canal_entrada = "evento"
         regiao_jp = extrair_regiao_jornada_porter(nome_raw)
         campanha_entrada = f"Jornada_Porter_{regiao_jp}" if regiao_jp else "Jornada_Porter"
-    elif origem_detalhe_org:
-        # leadOrigin da organização (ex.: "Redes Sociais" -> meta_ads)
-        canal_entrada = mapear_canal_origem_agendor(origem_detalhe_org)
-        campanha_entrada = None
+    elif canal_origem:
+        # leadOrigin (ex.: "Site" -> site, "Eventos Patrocinados" -> evento)
+        canal_entrada, campanha_entrada = canal_origem, None
+    elif campanha_evento:
+        # categoria da pessoa / funil do negócio (Jornada Porter, Porter Summit)
+        canal_entrada, campanha_entrada = "evento", campanha_evento
     else:
-        canal_entrada = "organico"
-        campanha_entrada = None
+        canal_entrada, campanha_entrada = "organico", None
 
     dados = {
         "nome": nome,
@@ -108,13 +117,23 @@ def _resolver_lead(conn, deal: dict) -> Optional[int]:
         "uf_derivada_por_ddd": marca_info["uf_derivada_por_ddd"],
         "canal_entrada": canal_entrada,
         "campanha_entrada": campanha_entrada,
-        "origem_detalhe_entrada": origem_detalhe_org,
+        "origem_detalhe_entrada": origem_detalhe,
         "data_entrada": deal.get("data_criacao") or datetime.now(timezone.utc),
         "payload": {"origem": "sync_agendor", "organizacao": pessoa.get("organizacao_nome") or deal.get("organizacao_nome")},
     }
     lead_id, criado = resolver_ou_criar_lead(conn, dados, fonte=FONTE)
     if not criado:
-        atualizar_campos_lead(conn, lead_id, {k: dados[k] for k in ("marca", "uf", "regiao") if dados.get(k)})
+        campos = {k: dados[k] for k in ("marca", "uf", "regiao") if dados.get(k)}
+        with conn.cursor() as cur:
+            cur.execute("SELECT canal_entrada, origem_detalhe_entrada FROM leads WHERE id = %s", (lead_id,))
+            atual = cur.fetchone()
+        if deve_substituir_canal(atual["canal_entrada"], canal_entrada):
+            campos["canal_entrada"] = canal_entrada
+            if campanha_entrada:
+                campos["campanha_entrada"] = campanha_entrada
+        if origem_detalhe and not atual["origem_detalhe_entrada"]:
+            campos["origem_detalhe_entrada"] = origem_detalhe
+        atualizar_campos_lead(conn, lead_id, campos)
     return lead_id
 
 

@@ -26,7 +26,29 @@ ORIGEM_CLIENTE_PARA_CANAL = {
     "eventos participantes": "evento",
     "eventos patrocinados": "evento",
     "redes sociais": "meta_ads",  # confirmado pela Stella (22/07/2026): é como o Agendor rotula leads vindos de Meta Ads
+    "link patrocinado": "google_ads",  # anúncio Google (07/10/2026, separação site/google/meta)
 }
+
+# Sinais de evento no Agendor além do nome "JP-<região>" (levantados em 07/10/2026
+# na base inteira): categoria da pessoa e funil do negócio
+CATEGORIAS_PESSOA_EVENTO = {"jornada porter": "Jornada_Porter", "porter summit": "Porter_Summit"}
+FUNIS_EVENTO = {"funil de leads jornadas porter": "Jornada_Porter", "funil de leads summit": "Porter_Summit"}
+
+
+def canal_concreto_origem_agendor(origem_raw: Optional[str]) -> Optional[str]:
+    """Como mapear_canal_origem_agendor, mas None (em vez de 'organico') quando a
+    origem não revela um canal da taxonomia — pra regra de precedência decidir."""
+    if not origem_raw:
+        return None
+    return ORIGEM_CLIENTE_PARA_CANAL.get(origem_raw.strip().lower())
+
+
+def campanha_evento_agendor(categoria_pessoa: Optional[str], funil: Optional[str]) -> Optional[str]:
+    """Nome do evento (campanha_entrada) se categoria da pessoa ou funil indicarem evento."""
+    for valor, mapa in ((categoria_pessoa, CATEGORIAS_PESSOA_EVENTO), (funil, FUNIS_EVENTO)):
+        if valor and valor.strip().lower() in mapa:
+            return mapa[valor.strip().lower()]
+    return None
 
 
 def mapear_status(status_raw: Optional[str]) -> str:

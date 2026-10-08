@@ -11,9 +11,9 @@ genéricas como "Consultor_escolheu" ou "Aguardando consultor escolher" são de
 outro fluxo e NÃO contam. Lead sem essa tag = está sendo tratado pela IA.
 
 Para leads já existentes (matched por telefone/e-mail), só os campos da camada
-IA são atualizados — canal_entrada/campanha_entrada/marca do primeiro toque
-nunca são sobrescritos por este worker. Só leads genuinamente novos (nunca
-vistos antes) recebem canal_entrada derivado do BotConversa.
+IA são atualizados — campanha_entrada/marca do primeiro toque nunca são
+sobrescritos por este worker. canal_entrada só muda pela regra de precedência de
+workers/common/canais.py (organico -> canal concreto; não pago -> anúncio pago).
 """
 import logging
 import re
@@ -27,6 +27,7 @@ from psycopg.types.json import Jsonb
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from workers.botconversa_api import listar_subscribers  # noqa: E402
+from workers.common.canais import deve_substituir_canal, mapear_canal_botconversa  # noqa: E402
 from workers.common.db import ConexaoComReconexao  # noqa: E402
 from workers.common.eventos import registrar_evento  # noqa: E402
 from workers.common.matching import atualizar_campos_lead, resolver_ou_criar_lead  # noqa: E402
@@ -52,18 +53,6 @@ CONTAS = {
 
 _RE_TAG_REPASSE = re.compile(r"^(distrib|enviado|envio)_(.+)$", re.IGNORECASE)
 
-# valores reais observados em "Canal de Aquisição" (22/07/2026) — o que não mapear
-# fica sem canal definido (o lead resolve pelo canal do primeiro toque, se houver)
-CANAL_AQUISICAO_MAP = {
-    "facebook ads": "meta_ads",
-    "anúncio": "meta_ads",
-    "anuncio": "meta_ads",
-    "anúncio instagram": "meta_ads",
-    "anuncio meta": "meta_ads",
-    "cadastro no site dsc": "site",
-}
-
-
 # tags Distrib_/Enviado_/Envio_ genéricas (sem nome de consultor de verdade) —
 # ainda contam como repasse, só não viram valor de leads.consultor
 _NOMES_GENERICOS_REPASSE = {"consultor"}
@@ -80,12 +69,6 @@ def _detectar_repasse(tags: list[str]) -> tuple[bool, Optional[str]]:
         return False, None
     especificos = [n for n in nomes if n.lower() not in _NOMES_GENERICOS_REPASSE]
     return True, (especificos[0] if especificos else None)
-
-
-def _mapear_canal(canal_raw: Optional[str]) -> Optional[str]:
-    if not canal_raw:
-        return None
-    return CANAL_AQUISICAO_MAP.get(canal_raw.strip().lower())
 
 
 def _calcular_status_ia(variaveis: dict, tags: list[str], houve_repasse: bool) -> tuple[str, bool]:
@@ -168,7 +151,7 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
 
     if lead_id_existente is None:
         marca_info = derivar_marca(conn, cidade=regiao_bc, consultor=consultor_repasse)
-        canal = _mapear_canal(variaveis.get("Canal de Aquisição")) or "organico"
+        canal = mapear_canal_botconversa(variaveis.get("Canal de Aquisição"), tags) or "organico"
         dados = {
             "nome": nome,
             "telefone": telefone,
@@ -199,11 +182,11 @@ def _processar_subscriber(conn, sub: dict, marca_conta: str, agora: datetime) ->
         }
         # canal_entrada='organico' é a marca de "não sabemos a origem" — se o
         # BotConversa revela um canal concreto (ex.: Facebook Ads), corrige em vez
-        # de manter uma atribuição que já era incerta (decisão da Stella, 22/07/2026)
-        if canal_atual == "organico":
-            canal_bc = _mapear_canal(variaveis.get("Canal de Aquisição"))
-            if canal_bc:
-                campos["canal_entrada"] = canal_bc
+        # de manter uma atribuição que já era incerta (decisão da Stella, 22/07/2026);
+        # anúncio pago também prevalece sobre site/evento (decisão de 07/10/2026)
+        canal_bc = mapear_canal_botconversa(variaveis.get("Canal de Aquisição"), tags)
+        if deve_substituir_canal(canal_atual, canal_bc):
+            campos["canal_entrada"] = canal_bc
         atualizar_campos_lead(conn, lead_id, campos)
 
     data_evento_conversa = sub.get("created_at") or agora
